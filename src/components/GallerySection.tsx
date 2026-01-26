@@ -85,19 +85,21 @@ export const GallerySection = () => {
             >
               {/* Blurred Photo Placeholder */}
               <div className="relative aspect-[4/5] bg-gradient-to-br from-secondary via-accent to-secondary overflow-hidden">
-                {/* Abstract decorative shapes to simulate blurred photo */}
-                <div className="absolute inset-0 blur-photo">
-                  <div className="absolute top-1/4 left-1/4 w-1/2 h-1/2 bg-rose-soft/40 rounded-full" />
-                  <div className="absolute top-1/3 right-1/4 w-1/3 h-1/3 bg-beige-warm/60 rounded-full" />
-                  <div className="absolute bottom-1/4 left-1/3 w-2/5 h-2/5 bg-accent/50 rounded-full" />
+                {/* Abstract decorative shapes to simulate blurred photo - same for all profiles */}
+                <div className="absolute inset-0 blur-[20px]">
+                  <div className="absolute top-1/4 left-1/4 w-1/2 h-1/2 bg-rose-soft/50 rounded-full" />
+                  <div className="absolute top-1/3 right-1/4 w-1/3 h-1/3 bg-beige-warm/70 rounded-full" />
+                  <div className="absolute bottom-1/4 left-1/3 w-2/5 h-2/5 bg-accent/60 rounded-full" />
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1/3 h-2/5 bg-primary/20 rounded-full" />
                 </div>
 
-                {/* Lock Overlay */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-foreground/5 backdrop-blur-[2px]">
-                  <div className="w-16 h-16 rounded-full bg-card/90 shadow-soft flex items-center justify-center mb-3">
+                {/* Lock Overlay - applies equally to all profiles regardless of gender */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-foreground/10 backdrop-blur-sm">
+                  <div className="w-16 h-16 rounded-full bg-card/95 shadow-elevated flex items-center justify-center mb-3">
                     <Lock size={28} className="text-primary" />
                   </div>
-                  <p className="text-sm font-medium text-foreground/80">Photo protégée</p>
+                  <p className="text-sm font-medium text-foreground/90">Photo protégée</p>
+                  <p className="text-xs text-muted-foreground mt-1">Débloquez l'accès pour voir</p>
                 </div>
 
                 {/* Verified Badge */}

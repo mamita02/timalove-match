@@ -10,9 +10,9 @@ export const HeroSection = () => {
         <img
           src={heroImage}
           alt="Couple romantique"
-          className="w-full h-full object-cover opacity-30"
+          className="w-full h-full object-cover opacity-60"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/60 to-background" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/40 to-background/90" />
       </div>
 
       {/* Decorative Elements */}
