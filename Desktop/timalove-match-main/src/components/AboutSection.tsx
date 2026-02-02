@@ -12,7 +12,7 @@ export const AboutSection = () => {
             <div className="relative">
               <div className="absolute -top-10 -right-10 w-48 h-48 bg-rose-200/10 rounded-full blur-3xl -z-10" />
               <img 
-                src="src/assets/timalove.png" 
+                src="src/assets/A PROPOS1Plan de travail 5.png" 
                 alt="Fatimata Ba - TimaLove" 
                 className="w-full h-auto max-h-[650px] object-contain relative z-10" 
               />

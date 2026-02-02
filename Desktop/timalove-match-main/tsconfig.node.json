@@ -10,7 +10,10 @@
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
-    "noEmit": true,
+    
+    /* Changements requis pour corriger tes erreurs */
+    "composite": true,      /* Indispensable pour les références de projet */
+    "noEmit": false,        /* Doit être false ou retiré quand composite est true */
 
     /* Linting */
     "strict": true,

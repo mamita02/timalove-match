@@ -18,7 +18,7 @@ const QuiSuisJe = () => {
           {/* IMAGE DE DROITE : Taille réduite et centrée verticalement */}
           <div className="absolute inset-y-0 right-0 w-full lg:w-1/2 flex items-center justify-end pr-4 lg:pr-12 pointer-events-none">
             <img 
-              src="src/assets/timalove.png" 
+              src="src/assets/A PROPOS1Plan de travail 5.png" 
               alt="Fatimata Ba - TimaLove" 
               className="w-auto h-[60%] lg:h-[75%] object-contain opacity-90" 
             />
