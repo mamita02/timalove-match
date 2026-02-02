@@ -1,10 +1,22 @@
 import { useState } from "react";
-import { Heart, Check } from "lucide-react";
+import { Heart, Check, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { toast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "./ui/form";
 
 const features = [
   "Profil validé manuellement",
@@ -13,35 +25,114 @@ const features = [
   "Confidentialité garantie",
 ];
 
+// Schéma de validation Zod
+const registrationSchema = z.object({
+  firstName: z.string()
+    .min(2, "Le prénom doit contenir au moins 2 caractères")
+    .max(50, "Le prénom ne peut pas dépasser 50 caractères"),
+  lastName: z.string()
+    .min(2, "Le nom doit contenir au moins 2 caractères")
+    .max(50, "Le nom ne peut pas dépasser 50 caractères"),
+  email: z.string()
+    .email("Adresse email invalide")
+    .toLowerCase(),
+  phone: z.string()
+    .regex(
+      /^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$/,
+      "Numéro de téléphone français invalide"
+    ),
+  age: z.coerce.number()
+    .int("L'âge doit être un nombre entier")
+    .min(18, "Vous devez avoir au moins 18 ans")
+    .max(99, "L'âge ne peut pas dépasser 99 ans"),
+  city: z.string()
+    .min(2, "La ville doit contenir au moins 2 caractères")
+    .max(100, "La ville ne peut pas dépasser 100 caractères"),
+  profession: z.string()
+    .max(100, "La profession ne peut pas dépasser 100 caractères")
+    .optional(),
+  presentation: z.string()
+    .min(50, "Votre présentation doit contenir au moins 50 caractères")
+    .max(1000, "Votre présentation ne peut pas dépasser 1000 caractères"),
+  lookingFor: z.string()
+    .min(30, "Décrivez ce que vous recherchez en au moins 30 caractères")
+    .max(500, "Cette description ne peut pas dépasser 500 caractères"),
+  acceptTerms: z.boolean()
+    .refine((val) => val === true, {
+      message: "Vous devez accepter les conditions d'utilisation",
+    }),
+});
+
+type RegistrationFormData = z.infer<typeof registrationSchema>;
+
 export const RegistrationSection = () => {
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    age: "",
-    city: "",
-    profession: "",
-    presentation: "",
-    lookingFor: "",
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const form = useForm<RegistrationFormData>({
+    resolver: zodResolver(registrationSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      age: undefined,
+      city: "",
+      profession: "",
+      presentation: "",
+      lookingFor: "",
+      acceptTerms: false,
+    },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast({
-      title: "Inscription reçue !",
-      description: "Nous vous contacterons très prochainement.",
-    });
-    console.log("Form submitted:", formData);
-  };
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
+  const onSubmit = async (data: RegistrationFormData) => {
+    setIsSubmitting(true);
+    
+    try {
+      // Importer dynamiquement le service Supabase
+      const { createRegistration } = await import('@/lib/supabase');
+      
+      // Préparer les données (retirer acceptTerms car non stocké en DB)
+      const { acceptTerms, ...registrationData } = data;
+      
+      // Envoyer à Supabase
+      const response = await createRegistration(registrationData);
+      
+      if (!response.success) {
+        throw new Error(response.error || "Erreur lors de l'inscription");
+      }
+      
+      console.log("✅ Inscription créée dans Supabase:", response.data?.id);
+      
+      toast({
+        title: "✓ Inscription reçue avec succès !",
+        description: "Nous examinerons votre profil et vous contacterons très prochainement.",
+      });
+      
+      // Réinitialiser le formulaire après succès
+      form.reset();
+    } catch (error) {
+      console.error("❌ Erreur lors de l'inscription:", error);
+      
+      // Fallback : sauvegarder localement si Supabase échoue
+      try {
+        const { saveRegistrationLocally } = await import('@/lib/api');
+        const { acceptTerms, ...registrationData } = data;
+        saveRegistrationLocally(registrationData);
+        
+        toast({
+          title: "⚠️ Inscription sauvegardée localement",
+          description: "Nous avons sauvegardé votre inscription. Nous vous contacterons dès que possible.",
+        });
+      } catch (fallbackError) {
+        toast({
+          title: "Erreur lors de l'inscription",
+          description: error instanceof Error ? error.message : "Une erreur s'est produite. Veuillez réessayer.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -98,140 +189,221 @@ export const RegistrationSection = () => {
 
             {/* Right Column - Form */}
             <div className="bg-card p-8 md:p-10 rounded-2xl shadow-elevated">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">Prénom *</Label>
-                    <Input
-                      id="firstName"
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
                       name="firstName"
-                      value={formData.firstName}
-                      onChange={handleChange}
-                      placeholder="Votre prénom"
-                      required
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Prénom *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Votre prénom" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Nom *</Label>
-                    <Input
-                      id="lastName"
+                    <FormField
+                      control={form.control}
                       name="lastName"
-                      value={formData.lastName}
-                      onChange={handleChange}
-                      placeholder="Votre nom"
-                      required
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nom *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Votre nom" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
                   </div>
-                </div>
 
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
                       name="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="votre@email.com"
-                      required
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="email" 
+                              placeholder="votre@email.com" 
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Téléphone *</Label>
-                    <Input
-                      id="phone"
+                    <FormField
+                      control={form.control}
                       name="phone"
-                      type="tel"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="+33 6 00 00 00 00"
-                      required
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Téléphone *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="tel" 
+                              placeholder="+33 6 00 00 00 00" 
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
                   </div>
-                </div>
 
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="age">Âge *</Label>
-                    <Input
-                      id="age"
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
                       name="age"
-                      type="number"
-                      min="18"
-                      max="99"
-                      value={formData.age}
-                      onChange={handleChange}
-                      placeholder="Votre âge"
-                      required
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Âge *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              min="18" 
+                              max="99" 
+                              placeholder="Votre âge" 
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="city">Ville *</Label>
-                    <Input
-                      id="city"
+                    <FormField
+                      control={form.control}
                       name="city"
-                      value={formData.city}
-                      onChange={handleChange}
-                      placeholder="Votre ville"
-                      required
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Ville *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Votre ville" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="profession">Profession</Label>
-                  <Input
-                    id="profession"
+                  <FormField
+                    control={form.control}
                     name="profession"
-                    value={formData.profession}
-                    onChange={handleChange}
-                    placeholder="Votre métier"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Profession</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Votre métier" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Optionnel
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="presentation">Présentez-vous *</Label>
-                  <Textarea
-                    id="presentation"
+                  <FormField
+                    control={form.control}
                     name="presentation"
-                    value={formData.presentation}
-                    onChange={handleChange}
-                    placeholder="Parlez-nous de vous, de vos passions, de ce qui vous rend unique..."
-                    rows={4}
-                    required
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Présentez-vous *</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Parlez-nous de vous, de vos passions, de ce qui vous rend unique..."
+                            rows={4}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Minimum 50 caractères - {field.value?.length || 0}/1000
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="lookingFor">Que recherchez-vous ? *</Label>
-                  <Textarea
-                    id="lookingFor"
+                  <FormField
+                    control={form.control}
                     name="lookingFor"
-                    value={formData.lookingFor}
-                    onChange={handleChange}
-                    placeholder="Décrivez le partenaire idéal et le type de relation que vous recherchez..."
-                    rows={3}
-                    required
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Que recherchez-vous ? *</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Décrivez le partenaire idéal et le type de relation que vous recherchez..."
+                            rows={3}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Minimum 30 caractères - {field.value?.length || 0}/500
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
 
-                <Button type="submit" variant="romantic" size="lg" className="w-full">
-                  Envoyer mon inscription
-                </Button>
+                  <FormField
+                    control={form.control}
+                    name="acceptTerms"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={field.onChange}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="text-sm font-normal">
+                            J'accepte les{" "}
+                            <a href="#" className="text-primary hover:underline">
+                              conditions d'utilisation
+                            </a>{" "}
+                            et la{" "}
+                            <a href="#" className="text-primary hover:underline">
+                              politique de confidentialité
+                            </a>
+                            . *
+                          </FormLabel>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}
+                  />
 
-                <p className="text-xs text-center text-muted-foreground">
-                  En soumettant ce formulaire, vous acceptez nos{" "}
-                  <a href="#" className="text-primary hover:underline">
-                    conditions d'utilisation
-                  </a>{" "}
-                  et notre{" "}
-                  <a href="#" className="text-primary hover:underline">
-                    politique de confidentialité
-                  </a>
-                  .
-                </p>
-              </form>
+                  <Button 
+                    type="submit" 
+                    variant="romantic" 
+                    size="lg" 
+                    className="w-full"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Envoi en cours...
+                      </>
+                    ) : (
+                      "Envoyer mon inscription"
+                    )}
+                  </Button>
+
+                  <p className="text-xs text-center text-muted-foreground">
+                    Vos données sont traitées avec la plus grande confidentialité.
+                  </p>
+                </form>
+              </Form>
             </div>
           </div>
         </div>
