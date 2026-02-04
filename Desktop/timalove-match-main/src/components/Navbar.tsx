@@ -53,7 +53,7 @@ export const Navbar = () => {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-white/95 backdrop-blur-md border-rose-100 shadow-xl rounded-2xl">
-                <Link to="/profile">
+                <Link to="/login">
                   <DropdownMenuItem className="cursor-pointer focus:bg-rose-50 focus:text-primary py-2 text-sm">
                     Se connecter
                   </DropdownMenuItem>
@@ -94,17 +94,22 @@ export const Navbar = () => {
               ))}
               <hr className="border-rose-100" />
               <div className="flex flex-col gap-2 pt-1">
-                 <Link 
-                    to="/profile" 
+                  <Link 
+                    to="/login" // 👈 Changé de /profile à /login
                     onClick={() => setIsOpen(false)} 
-                    className="text-primary italic font-medium py-1 px-2 text-sm"
-                 >
+                    className="text-primary italic font-medium py-1 px-2 text-sm text-center"
+                  >
                     Se connecter
-                 </Link>
-                 <button className="bg-primary text-white py-2 px-6 rounded-full font-bold text-center text-sm shadow-md">
+                  </Link>
+                  
+                  <Link 
+                    to="/register" // 👈 Utilise Link au lieu de <button> pour la navigation
+                    onClick={() => setIsOpen(false)}
+                    className="bg-primary text-white py-2 px-6 rounded-full font-bold text-center text-sm shadow-md hover:bg-primary/90 transition-colors"
+                  >
                     S'inscrire
-                 </button>
-              </div>
+                  </Link>
+                </div>
             </div>
           </div>
         )}

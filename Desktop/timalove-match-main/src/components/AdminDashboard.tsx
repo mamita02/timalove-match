@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -8,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -16,16 +16,72 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea"; // Probablement celui qui manque
 import { toast } from "@/hooks/use-toast";
-import { getAllRegistrations, updateRegistrationStatus } from "@/lib/supabase";
-import { CheckCircle, Clock, Globe, Loader2, Mail, MapPin, Phone, User, Users, XCircle } from "lucide-react";
+import { getAllRegistrations, supabase } from "@/lib/supabase"; // Ajout de supabase ici
+import { Edit3, Globe, Loader2, LogOut, Mail, MapPin, Phone, Trash2, User, Users } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+// 1. AJOUTE CETTE FONCTION JUSTE AVANT TON COMPOSANT
 
 export const InscriptionsManager = () => {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>(null);
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const navigate = useNavigate();
+
+        // FONCTION SUPPRIMER
+      const handleDelete = async (id: string) => {
+        if (window.confirm("Es-tu sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.")) {
+          try {
+            const { error } = await supabase
+              .from('recent_registrations') // Vérifie bien le nom de ta table
+              .delete()
+              .eq('id', id);
+
+            if (error) throw error;
+
+            toast({ title: "Utilisateur supprimé", description: "La fiche a été retirée de la base." });
+            setRegistrations(prev => prev.filter(reg => reg.id !== id));
+            setSelectedReg(null);
+          } catch (err) {
+            toast({ title: "Erreur", description: "Impossible de supprimer.", variant: "destructive" });
+          }
+        }
+      };
+
+      // FONCTION MODIFIER (Ouvre une alerte pour l'instant ou redirige)
+          const handleEdit = (reg: any) => {
+      // On remplit editForm avec toutes les données de l'utilisateur sélectionné
+      setEditForm({ ...reg }); 
+      
+      // On bascule l'affichage du Dialog vers le formulaire d'édition
+      setIsEditing(true); 
+      
+      toast({ 
+        description: "Mode édition activé. Vous pouvez modifier les informations.",
+      });
+    };
+
+  // --- FONCTION DE DÉCONNEXION ---
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast({ description: "Déconnexion réussie" });
+      navigate("/admin"); // Redirige vers le formulaire de login
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: "Impossible de se déconnecter",
+        variant: "destructive",
+      });
+    }
+  };
 
   const loadRegistrations = async () => {
     setLoading(true);
@@ -53,42 +109,9 @@ export const InscriptionsManager = () => {
     loadRegistrations();
   }, [filter]);
 
-  const handleStatusChange = async (id: string, newStatus: 'approved' | 'rejected') => {
-    try {
-      const response = await updateRegistrationStatus(id, newStatus);
-      
-      if (response.success) {
-        toast({
-          title: "✓ Statut mis à jour",
-          description: `L'inscription a été ${newStatus === 'approved' ? 'approuvée' : 'rejetée'}`,
-        });
-        // Mise à jour locale pour éviter l'erreur de coercion JSON
-        setRegistrations(prev => prev.map(reg => reg.id === id ? { ...reg, status: newStatus } : reg));
-        setSelectedReg(null);
-      } else {
-        throw new Error(response.error);
-      }
-    } catch (error: any) {
-      toast({
-        title: "Erreur",
-        description: "Impossible de mettre à jour le statut. Vérifiez vos droits admin.",
-        variant: "destructive",
-      });
-    }
-  };
+  
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="secondary"><Clock size={14} className="mr-1" /> En attente</Badge>;
-      case 'approved':
-        return <Badge className="bg-green-500 text-white"><CheckCircle size={14} className="mr-1" /> Approuvé</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive"><XCircle size={14} className="mr-1" /> Rejeté</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
-    }
-  };
+  
 
   const stats = {
     total: registrations.length,
@@ -97,11 +120,60 @@ export const InscriptionsManager = () => {
     rejected: registrations.filter(r => r.status === 'rejected').length,
   };
 
+     const saveChanges = async () => {
+        if (!editForm || !editForm.id) return;
+
+        try {
+          const { error } = await supabase
+            .from('registrations') // ✅ ON CIBLE LA TABLE, PAS LA VUE
+            .update({
+              first_name: editForm.firstName,   // Correspond à first_name dans ton SQL
+              last_name: editForm.lastName,     // Correspond à last_name dans ton SQL
+              city: editForm.city,
+              age: parseInt(editForm.age),
+              presentation: editForm.presentation,
+              // Ajoute ici d'autres champs si nécessaire (ex: country, gender)
+            })
+            .eq('id', editForm.id);
+
+          if (error) throw error;
+
+          toast({ 
+            title: "Profil mis à jour", 
+            description: "Les modifications ont été enregistrées dans la base de données." 
+          });
+          
+          // Mise à jour de l'affichage local pour éviter de recharger la page
+          setRegistrations(prev => prev.map(r => r.id === editForm.id ? { ...editForm } : r));
+          setSelectedReg({ ...editForm });
+          setIsEditing(false);
+
+        } catch (err: any) {
+          console.error("Erreur de sauvegarde:", err);
+          toast({ 
+            title: "Erreur", 
+            description: err.message || "Impossible de sauvegarder.", 
+            variant: "destructive" 
+          });
+        }
+     };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-serif font-semibold tracking-tight">Inscriptions</h2>
-        <p className="text-muted-foreground mt-2">Gérer et approuver les inscriptions</p>
+      {/* HEADER AVEC BOUTON DÉCONNEXION */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-serif font-semibold tracking-tight">Inscriptions</h2>
+          <p className="text-muted-foreground mt-2">Gérer et approuver les inscriptions</p>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={handleLogout}
+          className="text-red-500 hover:text-red-700 hover:bg-red-50 gap-2 border-red-100"
+        >
+          <LogOut size={18} />
+          Déconnexion
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -127,11 +199,10 @@ export const InscriptionsManager = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Photo</TableHead>
-                    <TableHead>Nom</TableHead>
+                    <TableHead>Prenom & Nom</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Pays/Ville</TableHead>
                     <TableHead>Âge</TableHead>
-                    <TableHead>Statut</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -147,11 +218,13 @@ export const InscriptionsManager = () => {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium">{reg.first_name} {reg.last_name}</TableCell>
+                      <TableCell className="font-medium">
+                      {reg.firstName} {reg.lastName}
+                     </TableCell>
+                      
                       <TableCell>{reg.email}</TableCell>
                       <TableCell>{reg.country || 'Sénégal'}, {reg.city}</TableCell>
                       <TableCell>{reg.age} ans</TableCell>
-                      <TableCell>{getStatusBadge(reg.status)}</TableCell>
                       <TableCell><Button size="sm" variant="ghost">Voir</Button></TableCell>
                     </TableRow>
                   ))}
@@ -162,61 +235,174 @@ export const InscriptionsManager = () => {
         </CardContent>
       </Card>
 
-      <Dialog open={!!selectedReg} onOpenChange={() => setSelectedReg(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-2xl overflow-hidden border">
-                    {selectedReg?.photo_url ? (
-                        <img src={selectedReg.photo_url} className="w-full h-full object-cover" />
-                    ) : (
-                        <User className="w-full h-full p-4 text-muted-foreground bg-muted" />
-                    )}
-                </div>
-                <div>
-                    <DialogTitle className="text-2xl font-serif">{selectedReg?.first_name} {selectedReg?.last_name}</DialogTitle>
-                    <DialogDescription>Inscrit le {selectedReg && new Date(selectedReg.createdAt || selectedReg.created_at).toLocaleDateString()}</DialogDescription>
-                </div>
-            </div>
-          </DialogHeader>
-
-          {selectedReg && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between bg-muted/30 p-3 rounded-lg">
-                <div>{getStatusBadge(selectedReg.status)}</div>
-                <div className="text-right">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Sexe</p>
-                    <p className="text-sm font-medium flex items-center gap-1 justify-end">
-                        <Users size={14} className="text-primary" /> 
-                        {selectedReg.gender === 'female' || selectedReg.gender === 'femme' ? 'Femme' : 'Homme'}
-                    </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 border rounded-xl"><p className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2"><Mail size={14} /> Email</p><p className="text-sm font-medium">{selectedReg.email}</p></div>
-                <div className="p-3 border rounded-xl"><p className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2"><Phone size={14} /> Téléphone</p><p className="text-sm font-medium">{selectedReg.phone}</p></div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="p-3 bg-slate-50 rounded-xl"><p className="text-xs font-bold text-muted-foreground uppercase">Âge</p><p className="text-sm font-medium">{selectedReg.age} ans</p></div>
-                <div className="p-3 bg-slate-50 rounded-xl"><p className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2"><MapPin size={14} /> Ville</p><p className="text-sm font-medium">{selectedReg.city}</p></div>
-                <div className="p-3 bg-slate-50 rounded-xl"><p className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2"><Globe size={14} /> Pays</p><p className="text-sm font-medium">{selectedReg.country || 'Sénégal'}</p></div>
-              </div>
-
-              <div><p className="text-xs font-bold text-muted-foreground uppercase mb-2">Présentation</p><div className="bg-muted/50 rounded-xl p-4"><p className="text-sm italic">"{selectedReg.presentation}"</p></div></div>
-              <div><p className="text-xs font-bold text-muted-foreground uppercase mb-2">Recherche</p><div className="bg-muted/50 rounded-xl p-4"><p className="text-sm">{selectedReg.lookingFor || selectedReg.looking_for}</p></div></div>
-
-              {selectedReg.status === 'pending' && (
-                <div className="flex gap-3 pt-4 border-t">
-                  <Button onClick={() => handleStatusChange(selectedReg.id, 'approved')} className="flex-1 bg-green-600 hover:bg-green-700 text-white"><CheckCircle size={16} className="mr-2" /> Approuver</Button>
-                  <Button onClick={() => handleStatusChange(selectedReg.id, 'rejected')} variant="destructive" className="flex-1"><XCircle size={16} className="mr-2" /> Rejeter</Button>
-                </div>
-              )}
-            </div>
+      {/* DIALOG DE DÉTAIL */}
+<Dialog open={!!selectedReg} onOpenChange={() => { 
+  setSelectedReg(null); 
+  setIsEditing(false); 
+}}>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-white rounded-3xl border-[#F3E5E0]">
+    <DialogHeader className="border-b border-[#F3E5E0] pb-6">
+      <div className="flex items-center gap-4">
+        <div className="w-20 h-20 rounded-2xl overflow-hidden border border-[#F3E5E0] shadow-sm">
+          {selectedReg?.photo_url ? (
+            <img src={selectedReg.photo_url} className="w-full h-full object-cover" alt="Profil" />
+          ) : (
+            <User className="w-full h-full p-4 text-muted-foreground bg-[#FDF8F5]" />
           )}
-        </DialogContent>
-      </Dialog>
+        </div>
+        <div className="text-left">
+          <DialogTitle className="text-2xl font-serif text-[#D48B8B]">
+            {isEditing ? "Modifier le profil" : `${selectedReg?.firstName} ${selectedReg?.lastName}`}
+          </DialogTitle>
+          <DialogDescription className="text-[#8B7E74]">
+            Membre inscrit le {selectedReg && new Date(selectedReg.createdAt || selectedReg.created_at).toLocaleDateString()}
+          </DialogDescription>
+        </div>
+      </div>
+    </DialogHeader>
+
+    {selectedReg && (
+      <div className="py-4">
+        {isEditing ? (
+          /* --- MODE ÉDITION --- */
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase text-[#8B7E74]">Prénom</label>
+                <Input 
+                  value={editForm?.firstName || ''} 
+                  onChange={(e) => setEditForm({...editForm, firstName: e.target.value})} 
+                  className="rounded-xl border-[#F3E5E0] focus:ring-[#D48B8B]"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase text-[#8B7E74]">Nom</label>
+                <Input 
+                  value={editForm?.lastName || ''} 
+                  onChange={(e) => setEditForm({...editForm, lastName: e.target.value})} 
+                  className="rounded-xl border-[#F3E5E0] focus:ring-[#D48B8B]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase text-[#8B7E74]">Ville</label>
+                <Input 
+                  value={editForm?.city || ''} 
+                  onChange={(e) => setEditForm({...editForm, city: e.target.value})} 
+                  className="rounded-xl border-[#F3E5E0]"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase text-[#8B7E74]">Âge</label>
+                <Input 
+                  type="number"
+                  value={editForm?.age || ''} 
+                  onChange={(e) => setEditForm({...editForm, age: e.target.value})} 
+                  className="rounded-xl border-[#F3E5E0]"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase text-[#8B7E74]">Présentation</label>
+              <Textarea 
+                value={editForm?.presentation || ''} 
+                onChange={(e) => setEditForm({...editForm, presentation: e.target.value})} 
+                className="rounded-xl border-[#F3E5E0] min-h-[120px]"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-6 border-t border-[#F3E5E0]">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setIsEditing(false)}>
+                Annuler
+              </Button>
+              <Button className="flex-1 bg-[#D48B8B] hover:bg-[#B56B6B] text-white rounded-xl font-bold" onClick={saveChanges}>
+                Enregistrer les modifications
+              </Button>
+            </div>
+          </div>
+        ) : (
+          /* --- MODE LECTURE (SANS STATUT) --- */
+          <div className="space-y-6">
+            <div className="flex items-center justify-end bg-[#FDF8F5] p-3 rounded-xl border border-[#F9E8E2]">
+              <div className="text-right">
+                <p className="text-[10px] uppercase font-bold text-[#8B7E74] tracking-widest">Sexe</p>
+                <p className="text-sm font-medium flex items-center gap-2 text-[#5F5751]">
+                  <Users size={16} className="text-[#D48B8B]" /> 
+                  {selectedReg.gender === 'female' || selectedReg.gender === 'femme' ? 'Femme' : 'Homme'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 border border-[#F3E5E0] rounded-2xl bg-white shadow-sm">
+                <p className="text-xs font-bold text-[#8B7E74] uppercase flex items-center gap-2 mb-1"><Mail size={14} className="text-[#D48B8B]" /> Email</p>
+                <p className="text-sm font-medium text-[#5F5751] truncate">{selectedReg.email}</p>
+              </div>
+              <div className="p-4 border border-[#F3E5E0] rounded-2xl bg-white shadow-sm">
+                <p className="text-xs font-bold text-[#8B7E74] uppercase flex items-center gap-2 mb-1"><Phone size={14} className="text-[#D48B8B]" /> Téléphone</p>
+                <p className="text-sm font-medium text-[#5F5751]">{selectedReg.phone || 'Non renseigné'}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-3 bg-[#FDF8F5] rounded-xl border border-[#F9E8E2]">
+                <p className="text-xs font-bold text-[#8B7E74] uppercase">Âge</p>
+                <p className="text-sm font-semibold text-[#5F5751]">{selectedReg.age} ans</p>
+              </div>
+              <div className="p-3 bg-[#FDF8F5] rounded-xl border border-[#F9E8E2]">
+                <p className="text-xs font-bold text-[#8B7E74] uppercase flex items-center gap-1"><MapPin size={14} /> Ville</p>
+                <p className="text-sm font-semibold text-[#5F5751]">{selectedReg.city}</p>
+              </div>
+              <div className="p-3 bg-[#FDF8F5] rounded-xl border border-[#F9E8E2]">
+                <p className="text-xs font-bold text-[#8B7E74] uppercase flex items-center gap-1"><Globe size={14} /> Pays</p>
+                <p className="text-sm font-semibold text-[#5F5751]">{selectedReg.country || 'Sénégal'}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-bold text-[#8B7E74] uppercase mb-2 tracking-widest">Présentation du profil</p>
+                <div className="bg-[#FDF8F5]/50 rounded-2xl p-4 border border-dashed border-[#F3E5E0]">
+                  <p className="text-sm text-[#5F5751] italic leading-relaxed">"{selectedReg.presentation || 'Aucune présentation fournie'}"</p>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-xs font-bold text-[#8B7E74] uppercase mb-2 tracking-widest">Ce qu'il/elle recherche</p>
+                <div className="bg-[#FDF8F5]/50 rounded-2xl p-4 border border-dashed border-[#F3E5E0]">
+                  <p className="text-sm text-[#5F5751]">{selectedReg.lookingFor || selectedReg.looking_research || 'Non spécifié'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-6 border-t border-[#F3E5E0] mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => handleEdit(selectedReg)}
+                className="flex-1 rounded-xl border-[#F3E5E0] text-[#5F5751] hover:bg-[#FDF8F5] gap-2"
+              >
+                <Edit3 size={16} /> Modifier le profil
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                onClick={() => handleDelete(selectedReg.id)}
+                className="flex-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl gap-2"
+              >
+                <Trash2 size={16} /> Supprimer définitivement
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
     </div>
-  );
+ 
+ 
+);
 };

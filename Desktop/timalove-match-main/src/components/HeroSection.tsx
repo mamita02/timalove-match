@@ -46,10 +46,15 @@ export const HeroSection = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-20 animate-fade-up">
-            <Button variant="romantic" size="lg" className="group rounded-full px-10 py-7 text-lg shadow-xl">
-              Commencer mon inscription
-              <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-            </Button>
+            
+            {/* Bouton redirigeant vers l'ID de la section d'inscription */}
+            <a href="#registration">
+              <Button variant="romantic" size="lg" className="group rounded-full px-10 py-7 text-lg shadow-xl">
+                Commencer mon inscription
+                <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </Button>
+            </a>
+
             <a href="#concept" className="text-white hover:text-primary transition-colors font-medium text-lg underline underline-offset-8 decoration-primary/50">
               Découvrir le concept
             </a>

@@ -22,7 +22,9 @@ const Index = () => {
         {/* 2. Ajout de la section Testimonials ici */}
         <Testimonials /> 
 
+        <section id="registration">
         <RegistrationSection />
+      </section>
         <ContactSection />
       </main>
       <Footer />

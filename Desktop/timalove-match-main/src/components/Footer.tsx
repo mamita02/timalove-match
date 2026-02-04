@@ -7,8 +7,8 @@ const footerLinks = [
   { label: "Comment ça marche", href: "#concept" },
   { label: "Avis", href: "#avis" },
   { label: "Contact", href: "#contact" },
-  { label: "Mentions légales", href: "#" },
-  { label: "CGU", href: "#" },
+  { label: "Mentions légales", href: "/legal" },
+  { label: "CGU", href: "/legal" },
 ];
 
 export const Footer = () => {

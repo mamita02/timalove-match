@@ -259,19 +259,15 @@ export const updateRegistrationStatus = async (
       .single();
 
     if (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
 
-    console.log(`✅ Statut mis à jour: ${id} → ${status}`);
-
+    // ✅ IMPORTANT : Mapper les données retournées pour que le frontend les comprenne
     return {
       success: true,
       data: {
         id: data.id,
-        firstName: data.first_name,
+        firstName: data.first_name, // On transforme snake_case en camelCase
         lastName: data.last_name,
         email: data.email,
         phone: data.phone,
