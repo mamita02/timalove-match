@@ -12,7 +12,6 @@ import QuiSuisJe from "./pages/QuiSuisJe";
 import RegistrationSuccess from "./pages/RegistrationSuccess";
 import { UserLogin } from "./pages/UserLogin"; // Vérifie bien le chemin vers ton fichier
 import UserProfile from "./pages/UserProfile";
-
 // AJOUTE CES IMPORTS :
 import AdminInscriptions from "./pages/AdminInscriptions";
 
@@ -37,6 +36,7 @@ const App = () => (
           {/* ESPACE MEMBRES (Protégé par ton code interne) */}
           <Route path="/profile" element={<UserProfile />} />
           <Route path="/profile/:id" element={<MemberDetail />} />
+          
 
           {/* ADMINISTRATION */}
           {/* J'ai supprimé le doublon /admin ici */}

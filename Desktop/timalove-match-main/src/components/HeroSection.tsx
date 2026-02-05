@@ -8,7 +8,7 @@ export const HeroSection = () => {
       {/* BACKGROUND IMAGE avec OVERLAY SOMBRE */}
       <div className="absolute inset-0 z-0">
         <img
-          src="src/assets/chatgpt.png"
+          src="src/assets/couple.png"
           alt="Mariage TimaLove"
           className="w-full h-full object-cover" 
         />

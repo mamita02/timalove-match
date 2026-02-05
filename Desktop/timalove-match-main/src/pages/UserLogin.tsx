@@ -71,7 +71,7 @@ export const UserLogin = () => {
           </div>
         </div>
         
-        <h1 className="text-3xl font-serif text-slate-900 mb-2">Heureux de vous revoir</h1>
+        <h1 className="text-3xl font-serif text-slate-900 mb-2">Bienvenue sur Timalove</h1>
         <p className="text-slate-500 text-sm mb-8">Connectez-vous pour voir vos matchs</p>
 
         <form onSubmit={handleLogin} className="space-y-4 text-left">

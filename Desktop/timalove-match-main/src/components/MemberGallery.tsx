@@ -1,5 +1,6 @@
-import { Briefcase, Heart, Lock, MapPin, Send } from "lucide-react";
-import { useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { Briefcase, Heart, Loader2, Lock, MapPin, Send } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 
@@ -12,40 +13,59 @@ interface MemberGalleryProps {
 export const MemberGallery = ({ forceShowNet, limit, targetSexe }: MemberGalleryProps) => {
   const navigate = useNavigate();
   
-  // État local pour les favoris (Sera lié à Supabase plus tard)
-  const [favorites, setFavorites] = useState<number[]>([]);
+  // États pour les données réelles et le chargement
+  const [members, setMembers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState<string[]>([]);
 
-  const toggleFavorite = (e: React.MouseEvent, id: number) => {
-    e.stopPropagation(); // Empêche d'ouvrir le profil quand on clique sur le cœur
+  // Récupération des données depuis Supabase
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      setLoading(true);
+      
+      // Correspondance avec les valeurs en base de données
+      const dbGender = targetSexe === 'femme' ? 'female' : 'male';
+
+      const { data, error } = await supabase
+        .from('registrations')
+        .select('*')
+        .eq('gender', dbGender)
+        .eq('status', 'approved') // Filtre les profils validés
+        .limit(limit);
+
+      if (!error && data) {
+        setMembers(data);
+      }
+      setLoading(false);
+    };
+
+    fetchProfiles();
+  }, [targetSexe, limit]);
+
+  const toggleFavorite = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     setFavorites(prev => 
       prev.includes(id) ? prev.filter(favId => favId !== id) : [...prev, id]
     );
   };
 
   const handleDemande = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Empêche d'ouvrir le profil quand on clique sur le bouton demande
-    // Logique pour contacter l'admin ici
+    e.stopPropagation();
     console.log("Demande envoyée à l'administratrice");
   };
 
-  // Simulation des données (À remplacer par l'appel Supabase)
-  const members = [
-    { id: 1, name: "Sophie", age: 28, city: "Dakar", job: "Architecte", sexe: "femme", img: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400" },
-    { id: 2, name: "Thomas", age: 32, city: "Paris", job: "Médecin", sexe: "homme", img: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400" },
-    { id: 3, name: "Amina", age: 26, city: "Saint-Louis", job: "Enseignante", sexe: "femme", img: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=400" },
-    { id: 4, name: "Marc", age: 35, city: "Lyon", job: "Entrepreneur", sexe: "homme", img: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400" },
-    { id: 5, name: "Fatou", age: 29, city: "Thies", job: "Pharmacienne", sexe: "femme", img: "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=400" },
-    { id: 6, name: "Alassane", age: 31, city: "Dakar", job: "Ingénieur", sexe: "homme", img: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400" },
-  ];
-
-  // Filtrage par sexe et limite d'affichage
-  const displayList = members
-    .filter(m => m.sexe === targetSexe)
-    .slice(0, limit);
+  // Affichage d'un loader pendant le chargement initial
+  if (loading && members.length === 0) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <Loader2 className="animate-spin text-primary/50" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-      {displayList.map((member) => (
+      {members.map((member) => (
         <div 
           key={member.id} 
           onClick={() => navigate(`/profile/${member.id}`)}
@@ -54,8 +74,8 @@ export const MemberGallery = ({ forceShowNet, limit, targetSexe }: MemberGallery
           {/* SECTION PHOTO */}
           <div className="relative aspect-[3/4] overflow-hidden">
             <img 
-              src={member.img} 
-              alt={member.name}
+              src={member.photo_url || "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=400"} 
+              alt={member.first_name}
               className={`w-full h-full object-cover transition-all duration-1000 ${
                 !forceShowNet ? 'blur-2xl scale-110' : 'blur-0 scale-100 group-hover:scale-105'
               }`} 
@@ -69,8 +89,6 @@ export const MemberGallery = ({ forceShowNet, limit, targetSexe }: MemberGallery
                 </div>
               </div>
             )}
-
-            
 
             {/* BOUTON CŒUR / FAVORIS */}
             <button 
@@ -93,19 +111,19 @@ export const MemberGallery = ({ forceShowNet, limit, targetSexe }: MemberGallery
             <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-serif font-bold text-slate-800 truncate">
-                  {member.name}, {member.age}
+                  {member.first_name}, {member.age}
                 </h3>
                 <div className="flex flex-col gap-0.5 mt-1.5 text-[10px] text-slate-400 font-semibold tracking-tight">
                   <span className="flex items-center gap-1 truncate">
-                    <MapPin size={10} className="text-primary/60" /> {member.city}
+                    <MapPin size={10} className="text-primary/60" /> {member.city || "Sénégal"}
                   </span>
                   <span className="flex items-center gap-1 truncate">
-                    <Briefcase size={10} className="text-primary/60" /> {member.job}
+                    <Briefcase size={10} className="text-primary/60" /> {member.job || "Membre"}
                   </span>
                 </div>
               </div>
 
-              {/* BOUTON DEMANDE (À CÔTÉ DU TEXTE) */}
+              {/* BOUTON DEMANDE */}
               <Button 
                 onClick={handleDemande}
                 size="sm" 

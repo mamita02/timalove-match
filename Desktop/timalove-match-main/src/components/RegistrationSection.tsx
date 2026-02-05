@@ -19,17 +19,22 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 
-// 1. Schéma de validation
+// 1. Schéma de validation mis à jour
 const registrationSchema = z.object({
   firstName: z.string().min(2, "Le prénom est requis"),
   lastName: z.string().min(2, "Le nom est requis"),
   email: z.string().email("Email invalide").toLowerCase(),
+  password: z.string().min(6, "Le mot de passe doit faire au moins 6 caractères"), // Nouveau
   gender: z.enum(["male", "female"], { 
     required_error: "Veuillez sélectionner votre sexe" 
+  }),
+  religion: z.enum(["Musulmane", "Chrétienne"], { // Nouveau
+    required_error: "Veuillez sélectionner votre religion" 
   }),
   country: z.enum(["Sénégal", "France"], { 
     required_error: "Veuillez sélectionner un pays" 
   }),
+  residence_country: z.string().min(2, "Le pays de résidence est requis"), // Nouveau
   phone: z.string().min(9, "Numéro trop court"),
   age: z.coerce.number().min(18, "18 ans minimum").max(99),
   city: z.string().min(2, "La ville est requise"),
@@ -38,6 +43,8 @@ const registrationSchema = z.object({
 });
 
 type RegistrationFormData = z.infer<typeof registrationSchema>;
+
+// ... (garder tes imports identiques)
 
 export const RegistrationSection = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,12 +58,14 @@ export const RegistrationSection = () => {
       firstName: "",
       lastName: "",
       email: "",
+      password: "",
       phone: "",
       age: undefined,
       city: "",
       presentation: "",
       lookingFor: "",
       country: "Sénégal",
+      residence_country: "",
     },
   });
 
@@ -74,6 +83,7 @@ export const RegistrationSection = () => {
       const { supabase } = await import('@/lib/supabase');
       let photoUrl = "";
 
+      // 1. Upload de la photo si elle existe
       if (photoFile) {
         const fileExt = photoFile.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
@@ -92,29 +102,46 @@ export const RegistrationSection = () => {
         photoUrl = urlData.publicUrl;
       }
 
-      const { error } = await supabase
-        .from('registrations')
-        .insert([
-          {
-            first_name: data.firstName,
-            last_name: data.lastName,
-            email: data.email,
-            phone: data.phone,
-            age: data.age,
-            city: data.city,
-            gender: data.gender,
-            country: data.country,
-            photo_url: photoUrl,
-            presentation: data.presentation,
-            looking_for: data.lookingFor,
-            status: 'pending'
-          }
-        ]);
+      // 2. CRÉATION DU COMPTE AUTH (Pour la connexion)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+      });
 
-      if (error) throw error;
+      if (authError) throw authError;
 
-      toast({ title: "Candidature envoyée !" });
-      navigate("/registration-success");
+      // 3. INSERTION DANS LA TABLE DES PROFILS (Pour l'affichage)
+      if (authData.user) {
+        const { error: dbError } = await supabase
+          .from('registrations')
+          .insert([
+            {
+              id: authData.user.id, // Lie le profil au compte Auth
+              first_name: data.firstName,
+              last_name: data.lastName,
+              email: data.email,
+              phone: data.phone,
+              age: data.age,
+              city: data.city,
+              gender: data.gender,
+              religion: data.religion,
+              country: data.country,
+              residence_country: data.residence_country,
+              photo_url: photoUrl,
+              presentation: data.presentation,
+              looking_for: data.lookingFor,
+              status: 'approved', // Devient actif immédiatement
+            }
+          ]);
+
+        if (dbError) throw dbError;
+
+        toast({ 
+          title: "Inscription réussie !", 
+          description: "Vous pouvez maintenant vous connecter." 
+        });
+        navigate("/login");
+      }
 
     } catch (error: any) {
       console.error(error);
@@ -128,183 +155,186 @@ export const RegistrationSection = () => {
     }
   };
 
-  return (
-    <section id="inscription" className="relative w-full min-h-[1000px] flex items-center justify-center py-12 overflow-hidden">
+ return (
+    <section id="inscription" className="relative w-full min-h-screen flex items-center justify-center py-12 overflow-hidden">
       
-      {/* ARRIÈRE-PLAN AVEC IMAGE */}
+      {/* ARRIÈRE-PLAN */}
       <div className="absolute inset-0 z-0">
         <img
           src="src/assets/paysagerencontre.png" 
           alt="Fond TimaLove"
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" />
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
-        <div className="max-w-3xl mx-auto flex flex-col items-center">
+        {/* Largeur diminuée ici (max-w-3xl) */}
+        <div className="max-w-3xl mx-auto"> 
           
-          <div className="text-center mb-8">
-            <h2 className="font-serif text-3xl md:text-5xl text-white mb-3 drop-shadow-lg">
+          <div className="text-center mb-6">
+            <h2 className="font-serif text-3xl md:text-5xl text-white mb-2 drop-shadow-lg">
               Rejoignez TimaLove
             </h2>
-            <p className="text-white/80 text-base md:text-lg font-light max-w-xl mx-auto">
-              Votre nouvelle histoire commence ici.
-            </p>
           </div>
 
-          <div className="w-full max-w-xl bg-white/95 backdrop-blur-xl p-6 md:p-8 rounded-[2.5rem] shadow-2xl border border-white/20">
+          <div className="w-full bg-white/95 backdrop-blur-xl p-6 md:p-8 rounded-[2.5rem] shadow-2xl border border-white/20">
             <header className="mb-6 text-center">
-              <span className="text-primary font-bold tracking-[0.2em] uppercase text-[9px] mb-1 block">
+              <span className="text-primary font-bold tracking-[0.2em] uppercase text-[10px] mb-1 block">
                 Inscription Privée
               </span>
               <h3 className="font-serif text-2xl text-slate-900">Créez votre profil</h3>
+              
+              {/* PHOTO DE PROFIL : PLACÉE EN HAUT MAINTENANT */}
+              <div className="flex flex-col items-center justify-center mt-6 space-y-2">
+                <div className="relative group">
+                  <Label htmlFor="photo-upload" className="cursor-pointer">
+                    <div className="w-24 h-24 rounded-full border-2 border-dashed border-primary/30 flex items-center justify-center overflow-hidden bg-white hover:border-primary transition-all shadow-md">
+                      {previewUrl ? (
+                        <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <Camera className="w-6 h-6 text-slate-300" />
+                      )}
+                    </div>
+                  </Label>
+                  <input id="photo-upload" type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                  {previewUrl && (
+                    <div className="absolute bottom-0 right-0 bg-green-500 text-white rounded-full p-1 shadow-md border-2 border-white">
+                      <Check className="w-3 h-3" />
+                    </div>
+                  )}
+                </div>
+                <span className="text-[9px] uppercase font-bold text-slate-400 tracking-tighter">Votre photo de profil</span>
+              </div>
             </header>
 
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 
-                {/* UPLOAD PHOTO */}
-                <div className="flex flex-col items-center mb-6">
-                  <div className="relative group">
-                    <Label htmlFor="photo-upload" className="cursor-pointer">
-                      <div className="w-24 h-24 rounded-full border-2 border-dashed border-primary/40 flex items-center justify-center overflow-hidden bg-white hover:bg-slate-50 transition-all">
-                        {previewUrl ? (
-                          <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                        ) : (
-                          <Camera className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
-                        )}
-                      </div>
-                    </Label>
-                    <input id="photo-upload" type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-                    {previewUrl && (
-                      <div className="absolute -bottom-1 -right-1 bg-green-500 text-white rounded-full p-1 shadow-lg">
-                        <Check className="w-3 h-3" />
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[9px] mt-2 uppercase font-bold text-slate-400 tracking-tighter">Photo de profil</span>
-                </div>
-
-                {/* GENRE ET PAYS */}
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="gender"
-                    render={({ field }) => (
+                {/* GRILLE DE CHAMPS */}
+                <div className="space-y-4">
+                  
+                  {/* LIGNE 1 : IDENTITÉ */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <FormField control={form.control} name="firstName" render={({ field }) => (
                       <FormItem className="space-y-1">
-                        <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Sexe</Label>
-                        <select {...field} className="w-full h-10 rounded-xl border-slate-200 bg-white text-sm px-3 outline-none focus:ring-1 focus:ring-primary">
-                          <option value="">Choisir...</option>
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Prénom</Label>
+                        <FormControl><Input placeholder="Prénom" className="h-10 border-slate-200 rounded-xl" {...field} /></FormControl>
+                        <FormMessage className="text-[10px]" />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="lastName" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Nom</Label>
+                        <FormControl><Input placeholder="Nom" className="h-10 border-slate-200 rounded-xl" {...field} /></FormControl>
+                        <FormMessage className="text-[10px]" />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="age" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Âge</Label>
+                        <FormControl><Input type="number" placeholder="25" className="h-10 border-slate-200 rounded-xl" {...field} /></FormControl>
+                        <FormMessage className="text-[10px]" />
+                      </FormItem>
+                    )} />
+                  </div>
+
+                  {/* LIGNE 2 : CONTACT & GENRE */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <FormField control={form.control} name="email" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Email</Label>
+                        <FormControl><Input type="email" placeholder="Email" className="h-10 border-slate-200 rounded-xl" {...field} /></FormControl>
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="phone" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Téléphone</Label>
+                        <FormControl><Input placeholder="Numéro" className="h-10 border-slate-200 rounded-xl" {...field} /></FormControl>
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="gender" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Sexe</Label>
+                        <select {...field} className="w-full h-10 rounded-xl border-slate-200 bg-white text-sm px-3 outline-none">
+                          <option value="">Sexe...</option>
                           <option value="male">Homme</option>
                           <option value="female">Femme</option>
                         </select>
-                        <FormMessage className="text-[10px]" />
                       </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="country"
-                    render={({ field }) => (
+                    )} />
+                  </div>
+
+                  {/* LIGNE 3 : RELIGION & MDP */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <FormField control={form.control} name="religion" render={({ field }) => (
                       <FormItem className="space-y-1">
-                        <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Pays</Label>
-                        <select {...field} className="w-full h-10 rounded-xl border-slate-200 bg-white text-sm px-3 outline-none focus:ring-1 focus:ring-primary">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Religion</Label>
+                        <select {...field} className="w-full h-10 rounded-xl border-slate-200 bg-white text-sm px-3 outline-none">
+                          <option value="">Choisir...</option>
+                          <option value="Musulmane">Musulmane</option>
+                          <option value="Chrétienne">Chrétienne</option>
+                        </select>
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="password" render={({ field }) => (
+                      <FormItem className="md:col-span-2 space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Mot de passe</Label>
+                        <FormControl><Input type="password" placeholder="••••••••" className="h-10 border-slate-200 rounded-xl" {...field} /></FormControl>
+                      </FormItem>
+                    )} />
+                  </div>
+
+                  {/* LIGNE 4 : LOCALISATION */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <FormField control={form.control} name="country" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Origine</Label>
+                        <select {...field} className="w-full h-10 rounded-xl border-slate-200 bg-white text-sm px-3">
                           <option value="Sénégal">Sénégal</option>
                           <option value="France">France</option>
                         </select>
-                        <FormMessage className="text-[10px]" />
                       </FormItem>
-                    )}
-                  />
-                </div>
+                    )} />
+                    <FormField control={form.control} name="residence_country" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Résidence</Label>
+                        <FormControl><Input placeholder="Pays" className="h-10 border-slate-200 rounded-xl" {...field} /></FormControl>
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="city" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Ville</Label>
+                        <FormControl><Input placeholder="Ville" className="h-10 border-slate-200 rounded-xl" {...field} /></FormControl>
+                      </FormItem>
+                    )} />
+                  </div>
 
-                {/* NOM & PRÉNOM */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <FormField control={form.control} name="firstName" render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Prénom</Label>
-                      <FormControl><Input placeholder="Prénom" className="h-10 border-slate-200 bg-white text-sm rounded-xl" {...field} /></FormControl>
-                      <FormMessage className="text-[10px]" />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="lastName" render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Nom</Label>
-                      <FormControl><Input placeholder="Nom" className="h-10 border-slate-200 bg-white text-sm rounded-xl" {...field} /></FormControl>
-                      <FormMessage className="text-[10px]" />
-                    </FormItem>
-                  )} />
-                </div>
+                  {/* TEXTAREAS SUR 2 COLONNES */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                    <FormField control={form.control} name="presentation" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Moi en quelques mots</Label>
+                        <FormControl><Textarea placeholder="..." className="min-h-[80px] border-slate-200 rounded-xl text-sm" {...field} /></FormControl>
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="lookingFor" render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <Label className="text-[10px] uppercase text-slate-400 ml-1">Mon partenaire idéal</Label>
+                        <FormControl><Textarea placeholder="..." className="min-h-[80px] border-slate-200 rounded-xl text-sm" {...field} /></FormControl>
+                      </FormItem>
+                    )} />
+                  </div>
 
-                {/* EMAIL & TÉLÉPHONE */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <FormField control={form.control} name="email" render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Email</Label>
-                      <FormControl><Input type="email" placeholder="votre@email.com" className="h-10 border-slate-200 bg-white text-sm rounded-xl" {...field} /></FormControl>
-                      <FormMessage className="text-[10px]" />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="phone" render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Téléphone ({form.watch("country") === "Sénégal" ? "+221" : "FR"})</Label>
-                      <FormControl><Input placeholder="Numéro" className="h-10 border-slate-200 bg-white text-sm rounded-xl" {...field} /></FormControl>
-                      <FormMessage className="text-[10px]" />
-                    </FormItem>
-                  )} />
-                </div>
-
-                {/* AGE & VILLE */}
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField control={form.control} name="age" render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Âge</Label>
-                      <FormControl><Input type="number" placeholder="28" className="h-10 border-slate-200 bg-white text-sm rounded-xl" {...field} /></FormControl>
-                      <FormMessage className="text-[10px]" />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="city" render={({ field }) => (
-                    <FormItem className="col-span-2 space-y-1">
-                      <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Ville</Label>
-                      <FormControl><Input placeholder="Ex: Dakar ou Paris" className="h-10 border-slate-200 bg-white text-sm rounded-xl" {...field} /></FormControl>
-                      <FormMessage className="text-[10px]" />
-                    </FormItem>
-                  )} />
-                </div>
-
-                {/* TEXTAREAS */}
-                <FormField control={form.control} name="presentation" render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Présentation (50 car. min)</Label>
-                    <FormControl><Textarea placeholder="Parlez-nous de vous..." className="min-h-[80px] border-slate-200 bg-white rounded-xl p-3 text-xs resize-none" {...field} /></FormControl>
-                    <FormMessage className="text-[10px]" />
-                  </FormItem>
-                )} />
-
-                <FormField control={form.control} name="lookingFor" render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <Label className="text-[9px] uppercase tracking-widest text-slate-500 ml-1">Partenaire idéal (30 car. min)</Label>
-                    <FormControl><Textarea placeholder="Ce que vous recherchez..." className="min-h-[60px] border-slate-200 bg-white rounded-xl p-3 text-xs resize-none" {...field} /></FormControl>
-                    <FormMessage className="text-[10px]" />
-                  </FormItem>
-                )} />
-
-                <div className="pt-2">
-                  <Button 
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="w-full h-12 rounded-full bg-primary hover:bg-primary/90 shadow-lg transition-all text-xs font-bold uppercase tracking-widest"
-                  >
-                    {isSubmitting ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Envoi...</>
-                    ) : (
-                      "Déposer ma candidature"
-                    )}
-                  </Button>
-                  <p className="text-[9px] text-slate-400 text-center mt-3">
-                     Confidentiel & Sécurisé • TimaLove Agency
-                  </p>
+                  <div className="pt-4">
+                    <Button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 shadow-lg text-sm font-bold uppercase tracking-widest"
+                    >
+                      {isSubmitting ? <Loader2 className="h-5 w-4 animate-spin" /> : "Valider l'inscription"}
+                    </Button>
+                  </div>
                 </div>
               </form>
             </Form>

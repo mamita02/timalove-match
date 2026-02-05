@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -31,72 +31,18 @@ export const InscriptionsManager = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>(null);
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [searchCountry, setSearchCountry] = useState("");
+  const [searchReligion, setSearchReligion] = useState("");
+  const [searchAge, setSearchAge] = useState("");
   const navigate = useNavigate();
 
-        // FONCTION SUPPRIMER
-      const handleDelete = async (id: string) => {
-        if (window.confirm("Es-tu sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.")) {
-          try {
-            const { error } = await supabase
-              .from('recent_registrations') // Vérifie bien le nom de ta table
-              .delete()
-              .eq('id', id);
-
-            if (error) throw error;
-
-            toast({ title: "Utilisateur supprimé", description: "La fiche a été retirée de la base." });
-            setRegistrations(prev => prev.filter(reg => reg.id !== id));
-            setSelectedReg(null);
-          } catch (err) {
-            toast({ title: "Erreur", description: "Impossible de supprimer.", variant: "destructive" });
-          }
-        }
-      };
-
-      // FONCTION MODIFIER (Ouvre une alerte pour l'instant ou redirige)
-          const handleEdit = (reg: any) => {
-      // On remplit editForm avec toutes les données de l'utilisateur sélectionné
-      setEditForm({ ...reg }); 
-      
-      // On bascule l'affichage du Dialog vers le formulaire d'édition
-      setIsEditing(true); 
-      
-      toast({ 
-        description: "Mode édition activé. Vous pouvez modifier les informations.",
-      });
-    };
-
-  // --- FONCTION DE DÉCONNEXION ---
-  const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      toast({ description: "Déconnexion réussie" });
-      navigate("/admin"); // Redirige vers le formulaire de login
-    } catch (error: any) {
-      toast({
-        title: "Erreur",
-        description: "Impossible de se déconnecter",
-        variant: "destructive",
-      });
-    }
-  };
-
+  // --- 1. CHARGEMENT DES DONNÉES ---
   const loadRegistrations = async () => {
     setLoading(true);
     try {
-      const filters = filter !== 'all' ? { status: filter, limit: 100 } : { limit: 100 };
-      const response = await getAllRegistrations(filters);
-      
+      const response = await getAllRegistrations({ limit: 500 });
       if (response.success && response.data) {
         setRegistrations(response.data);
-      } else {
-        toast({
-          title: "Erreur",
-          description: response.error || "Impossible de charger les inscriptions",
-          variant: "destructive",
-        });
       }
     } catch (error) {
       console.error("Erreur:", error);
@@ -107,89 +53,168 @@ export const InscriptionsManager = () => {
 
   useEffect(() => {
     loadRegistrations();
-  }, [filter]);
+  }, []);
 
-  
-
-  
+  // --- 2. LOGIQUE DE FILTRAGE (Déclarée avant les stats) ---
+  const filteredRegistrations = registrations.filter((reg) => {
+    const matchCountry = reg.country?.toLowerCase().includes(searchCountry.toLowerCase()) || 
+                         reg.residenceCountry?.toLowerCase().includes(searchCountry.toLowerCase());
+    const matchReligion = reg.religion?.toLowerCase().includes(searchReligion.toLowerCase());
+    const matchAge = searchAge ? reg.age?.toString() === searchAge : true;
+    return matchCountry && matchReligion && matchAge;
+  });
 
   const stats = {
     total: registrations.length,
-    pending: registrations.filter(r => r.status === 'pending').length,
-    approved: registrations.filter(r => r.status === 'approved').length,
-    rejected: registrations.filter(r => r.status === 'rejected').length,
+    visible: filteredRegistrations.length,
   };
 
-     const saveChanges = async () => {
-        if (!editForm || !editForm.id) return;
+  // --- 3. ACTIONS (Déconnexion, Suppression, Modification) ---
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      toast({ description: "Déconnexion réussie" });
+      navigate("/admin");
+    } catch (error) {
+      toast({ title: "Erreur", description: "Impossible de se déconnecter", variant: "destructive" });
+    }
+  };
 
-        try {
-          const { error } = await supabase
-            .from('registrations') // ✅ ON CIBLE LA TABLE, PAS LA VUE
-            .update({
-              first_name: editForm.firstName,   // Correspond à first_name dans ton SQL
-              last_name: editForm.lastName,     // Correspond à last_name dans ton SQL
-              city: editForm.city,
-              age: parseInt(editForm.age),
-              presentation: editForm.presentation,
-              // Ajoute ici d'autres champs si nécessaire (ex: country, gender)
-            })
-            .eq('id', editForm.id);
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Es-tu sûr de vouloir supprimer cet utilisateur ?")) {
+      try {
+        const { error } = await supabase.from('registrations').delete().eq('id', id);
+        if (error) throw error;
+        setRegistrations(prev => prev.filter(reg => reg.id !== id));
+        setSelectedReg(null);
+        toast({ title: "Utilisateur supprimé" });
+      } catch (err) {
+        toast({ title: "Erreur", description: "Impossible de supprimer.", variant: "destructive" });
+      }
+    }
+  };
 
-          if (error) throw error;
+  const handleEdit = (reg: any) => {
+    setEditForm({ ...reg });
+    setIsEditing(true);
+  };
 
-          toast({ 
-            title: "Profil mis à jour", 
-            description: "Les modifications ont été enregistrées dans la base de données." 
-          });
-          
-          // Mise à jour de l'affichage local pour éviter de recharger la page
-          setRegistrations(prev => prev.map(r => r.id === editForm.id ? { ...editForm } : r));
-          setSelectedReg({ ...editForm });
-          setIsEditing(false);
+  const saveChanges = async () => {
+    if (!editForm || !editForm.id) return;
+    try {
+      const { error } = await supabase
+        .from('registrations')
+        .update({
+          first_name: editForm.firstName,
+          last_name: editForm.lastName,
+          city: editForm.city,
+          age: parseInt(editForm.age),
+          presentation: editForm.presentation,
+        })
+        .eq('id', editForm.id);
 
-        } catch (err: any) {
-          console.error("Erreur de sauvegarde:", err);
-          toast({ 
-            title: "Erreur", 
-            description: err.message || "Impossible de sauvegarder.", 
-            variant: "destructive" 
-          });
-        }
-     };
-
+      if (error) throw error;
+      setRegistrations(prev => prev.map(r => r.id === editForm.id ? { ...editForm } : r));
+      setSelectedReg({ ...editForm });
+      setIsEditing(false);
+      toast({ title: "Profil mis à jour" });
+    } catch (err: any) {
+      toast({ title: "Erreur", description: "Sauvegarde échouée.", variant: "destructive" });
+    }
+  };
   return (
     <div className="space-y-6">
-      {/* HEADER AVEC BOUTON DÉCONNEXION */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h2 className="text-3xl font-serif font-semibold tracking-tight">Inscriptions</h2>
-          <p className="text-muted-foreground mt-2">Gérer et approuver les inscriptions</p>
-        </div>
-        <Button 
-          variant="outline" 
-          onClick={handleLogout}
-          className="text-red-500 hover:text-red-700 hover:bg-red-50 gap-2 border-red-100"
-        >
-          <LogOut size={18} />
-          Déconnexion
-        </Button>
-      </div>
+  {/* HEADER AVEC BOUTON DÉCONNEXION */}
+  <div className="flex justify-between items-center">
+    <div>
+      <h2 className="text-3xl font-serif font-semibold tracking-tight">Inscriptions</h2>
+      <p className="text-muted-foreground mt-2">Gérer les inscriptions</p>
+    </div>
+    <Button 
+      variant="outline" 
+      onClick={handleLogout}
+      className="text-red-500 hover:text-red-700 hover:bg-red-50 gap-2 border-red-100"
+    >
+      <LogOut size={18} />
+      Déconnexion
+    </Button>
+  </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card><CardHeader className="pb-2"><CardDescription>Total</CardDescription><CardTitle className="text-3xl">{stats.total}</CardTitle></CardHeader></Card>
-        <Card><CardHeader className="pb-2"><CardDescription>En attente</CardDescription><CardTitle className="text-3xl text-yellow-600">{stats.pending}</CardTitle></CardHeader></Card>
-        <Card><CardHeader className="pb-2"><CardDescription>Approuvées</CardDescription><CardTitle className="text-3xl text-green-600">{stats.approved}</CardTitle></CardHeader></Card>
-        <Card><CardHeader className="pb-2"><CardDescription>Rejetées</CardDescription><CardTitle className="text-3xl text-red-600">{stats.rejected}</CardTitle></CardHeader></Card>
-      </div>
+  {/* --- BLOC STATISTIQUES DYNAMIQUES (4 CARTES ALIGNÉES) --- */}
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+    {/* Carte 1 : Total Filtré */}
+    <Card className="border-[#F3E5E0] shadow-sm bg-white">
+      <CardContent className="p-4">
+        <p className="text-sm font-medium text-[#8B7E74]">Total</p>
+        <h3 className="text-3xl font-serif mt-2 font-bold text-[#5F5751]">
+          {filteredRegistrations.length}
+        </h3>
+      </CardContent>
+    </Card>
 
-      <div className="flex gap-2 mb-6">
-        <Button variant={filter === 'all' ? 'default' : 'outline'} onClick={() => setFilter('all')}>Toutes</Button>
-        <Button variant={filter === 'pending' ? 'default' : 'outline'} onClick={() => setFilter('pending')}>En attente</Button>
-        <Button variant={filter === 'approved' ? 'default' : 'outline'} onClick={() => setFilter('approved')}>Approuvées</Button>
-      </div>
+    {/* Carte 2 : En attente (parmi les filtrés) */}
+    <Card className="border-[#F3E5E0] shadow-sm bg-white">
+      <CardContent className="p-4">
+        <p className="text-sm font-medium text-[#8B7E74]">En attente</p>
+        <h3 className="text-3xl font-serif mt-2 font-bold text-orange-400">
+          {filteredRegistrations.filter(r => r.status === 'pending' || r.status === 'En attente').length}
+        </h3>
+      </CardContent>
+    </Card>
 
-      <Card>
+    {/* Carte 3 : Approuvées (parmi les filtrés) */}
+    <Card className="border-[#F3E5E0] shadow-sm bg-white">
+      <CardContent className="p-4">
+        <p className="text-sm font-medium text-[#8B7E74]">Approuvées</p>
+        <h3 className="text-3xl font-serif mt-2 font-bold text-green-600">
+          {filteredRegistrations.filter(r => r.status === 'approved' || r.status === 'Approuvé').length}
+        </h3>
+      </CardContent>
+    </Card>
+
+    {/* Carte 4 : Rejetées (parmi les filtrés) */}
+    <Card className="border-[#F3E5E0] shadow-sm bg-white">
+      <CardContent className="p-4">
+        <p className="text-sm font-medium text-[#8B7E74]">Rejetées</p>
+        <h3 className="text-3xl font-serif mt-2 font-bold text-red-600">
+          {filteredRegistrations.filter(r => r.status === 'rejected' || r.status === 'Rejeté').length}
+        </h3>
+      </CardContent>
+    </Card>
+  </div>
+
+  {/* FILTRES DE RECHERCHE */}
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div className="relative">
+      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-[#D48B8B]" size={18} />
+      <Input 
+        placeholder="Filtrer par pays..." 
+        value={searchCountry}
+        onChange={(e) => setSearchCountry(e.target.value)}
+        className="pl-10 rounded-2xl border-[#F3E5E0] focus-visible:ring-[#D48B8B]"
+      />
+    </div>
+    <div className="relative">
+      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-[#D48B8B]" size={18} />
+      <Input 
+        placeholder="Filtrer par religion..." 
+        value={searchReligion}
+        onChange={(e) => setSearchReligion(e.target.value)}
+        className="pl-10 rounded-2xl border-[#F3E5E0] focus-visible:ring-[#D48B8B]"
+      />
+    </div>
+    <div className="relative">
+      <Input 
+        type="number"
+        placeholder="Âge précis..." 
+        value={searchAge}
+        onChange={(e) => setSearchAge(e.target.value)}
+        className="rounded-2xl border-[#F3E5E0] focus-visible:ring-[#D48B8B]"
+      />
+    </div>
+  </div>
+
+     <Card>
         <CardContent className="pt-6">
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
@@ -203,11 +228,12 @@ export const InscriptionsManager = () => {
                     <TableHead>Email</TableHead>
                     <TableHead>Pays/Ville</TableHead>
                     <TableHead>Âge</TableHead>
+                    <TableHead>Religion</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {registrations.map((reg) => (
+                  {filteredRegistrations.map((reg) => (
                     <TableRow key={reg.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedReg(reg)}>
                       <TableCell>
                         <div className="w-10 h-10 rounded-full bg-muted overflow-hidden border">
@@ -221,10 +247,10 @@ export const InscriptionsManager = () => {
                       <TableCell className="font-medium">
                       {reg.firstName} {reg.lastName}
                      </TableCell>
-                      
                       <TableCell>{reg.email}</TableCell>
                       <TableCell>{reg.country || 'Sénégal'}, {reg.city}</TableCell>
                       <TableCell>{reg.age} ans</TableCell>
+                      <TableCell>{reg.religion}</TableCell>
                       <TableCell><Button size="sm" variant="ghost">Voir</Button></TableCell>
                     </TableRow>
                   ))}
@@ -264,67 +290,130 @@ export const InscriptionsManager = () => {
     {selectedReg && (
       <div className="py-4">
         {isEditing ? (
-          /* --- MODE ÉDITION --- */
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase text-[#8B7E74]">Prénom</label>
-                <Input 
-                  value={editForm?.firstName || ''} 
-                  onChange={(e) => setEditForm({...editForm, firstName: e.target.value})} 
-                  className="rounded-xl border-[#F3E5E0] focus:ring-[#D48B8B]"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase text-[#8B7E74]">Nom</label>
-                <Input 
-                  value={editForm?.lastName || ''} 
-                  onChange={(e) => setEditForm({...editForm, lastName: e.target.value})} 
-                  className="rounded-xl border-[#F3E5E0] focus:ring-[#D48B8B]"
-                />
-              </div>
-            </div>
+         /* --- MODE ÉDITION COMPLET --- */
+<div className="space-y-6">
+  {/* Prénom & Nom */}
+  <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Prénom</label>
+      <Input 
+        value={editForm?.firstName || ''} 
+        onChange={(e) => setEditForm({...editForm, firstName: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0] focus:ring-[#D48B8B]"
+      />
+    </div>
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Nom</label>
+      <Input 
+        value={editForm?.lastName || ''} 
+        onChange={(e) => setEditForm({...editForm, lastName: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0] focus:ring-[#D48B8B]"
+      />
+    </div>
+  </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase text-[#8B7E74]">Ville</label>
-                <Input 
-                  value={editForm?.city || ''} 
-                  onChange={(e) => setEditForm({...editForm, city: e.target.value})} 
-                  className="rounded-xl border-[#F3E5E0]"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase text-[#8B7E74]">Âge</label>
-                <Input 
-                  type="number"
-                  value={editForm?.age || ''} 
-                  onChange={(e) => setEditForm({...editForm, age: e.target.value})} 
-                  className="rounded-xl border-[#F3E5E0]"
-                />
-              </div>
-            </div>
+  {/* Email & Téléphone */}
+  <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Email</label>
+      <Input 
+        type="email"
+        value={editForm?.email || ''} 
+        onChange={(e) => setEditForm({...editForm, email: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0]"
+      />
+    </div>
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Téléphone</label>
+      <Input 
+        value={editForm?.phone || ''} 
+        onChange={(e) => setEditForm({...editForm, phone: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0]"
+      />
+    </div>
+  </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase text-[#8B7E74]">Présentation</label>
-              <Textarea 
-                value={editForm?.presentation || ''} 
-                onChange={(e) => setEditForm({...editForm, presentation: e.target.value})} 
-                className="rounded-xl border-[#F3E5E0] min-h-[120px]"
-              />
-            </div>
+  {/* Ville & Âge & Religion */}
+  <div className="grid grid-cols-3 gap-4">
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Ville</label>
+      <Input 
+        value={editForm?.city || ''} 
+        onChange={(e) => setEditForm({...editForm, city: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0]"
+      />
+    </div>
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Âge</label>
+      <Input 
+        type="number"
+        value={editForm?.age || ''} 
+        onChange={(e) => setEditForm({...editForm, age: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0]"
+      />
+    </div>
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Religion</label>
+      <Input 
+        value={editForm?.religion || ''} 
+        onChange={(e) => setEditForm({...editForm, religion: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0]"
+      />
+    </div>
+  </div>
 
-            <div className="flex gap-3 pt-6 border-t border-[#F3E5E0]">
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setIsEditing(false)}>
-                Annuler
-              </Button>
-              <Button className="flex-1 bg-[#D48B8B] hover:bg-[#B56B6B] text-white rounded-xl font-bold" onClick={saveChanges}>
-                Enregistrer les modifications
-              </Button>
-            </div>
-          </div>
+  {/* Pays Origine & Pays Résidence */}
+  <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Pays d'Origine</label>
+      <Input 
+        value={editForm?.country || ''} 
+        onChange={(e) => setEditForm({...editForm, country: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0]"
+      />
+    </div>
+    <div className="space-y-2">
+      <label className="text-xs font-bold uppercase text-[#8B7E74]">Pays de Résidence</label>
+      <Input 
+        value={editForm?.residenceCountry || ''} 
+        onChange={(e) => setEditForm({...editForm, residenceCountry: e.target.value})} 
+        className="rounded-xl border-[#F3E5E0]"
+      />
+    </div>
+  </div>
+
+  {/* Présentation */}
+  <div className="space-y-2">
+    <label className="text-xs font-bold uppercase text-[#8B7E74]">Présentation</label>
+    <Textarea 
+      value={editForm?.presentation || ''} 
+      onChange={(e) => setEditForm({...editForm, presentation: e.target.value})} 
+      className="rounded-xl border-[#F3E5E0] min-h-[100px]"
+    />
+  </div>
+
+  {/* Recherche */}
+  <div className="space-y-2">
+    <label className="text-xs font-bold uppercase text-[#8B7E74]">Ce qu'il/elle recherche</label>
+    <Textarea 
+      value={editForm?.lookingFor || editForm?.looking_research || ''} 
+      onChange={(e) => setEditForm({...editForm, lookingFor: e.target.value})} 
+      className="rounded-xl border-[#F3E5E0] min-h-[80px]"
+    />
+  </div>
+
+  {/* Boutons d'action */}
+  <div className="flex gap-3 pt-6 border-t border-[#F3E5E0]">
+    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setIsEditing(false)}>
+      Annuler
+    </Button>
+    <Button className="flex-1 bg-[#D48B8B] hover:bg-[#B56B6B] text-white rounded-xl font-bold" onClick={saveChanges}>
+      Enregistrer les modifications
+    </Button>
+  </div>
+</div>
         ) : (
-          /* --- MODE LECTURE (SANS STATUT) --- */
+          /* --- MODE LECTURE --- */
           <div className="space-y-6">
             <div className="flex items-center justify-end bg-[#FDF8F5] p-3 rounded-xl border border-[#F9E8E2]">
               <div className="text-right">
@@ -347,7 +436,8 @@ export const InscriptionsManager = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            {/* Grille d'infos détaillées */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="p-3 bg-[#FDF8F5] rounded-xl border border-[#F9E8E2]">
                 <p className="text-xs font-bold text-[#8B7E74] uppercase">Âge</p>
                 <p className="text-sm font-semibold text-[#5F5751]">{selectedReg.age} ans</p>
@@ -357,8 +447,16 @@ export const InscriptionsManager = () => {
                 <p className="text-sm font-semibold text-[#5F5751]">{selectedReg.city}</p>
               </div>
               <div className="p-3 bg-[#FDF8F5] rounded-xl border border-[#F9E8E2]">
-                <p className="text-xs font-bold text-[#8B7E74] uppercase flex items-center gap-1"><Globe size={14} /> Pays</p>
+                <p className="text-xs font-bold text-[#8B7E74] uppercase flex items-center gap-1"><Globe size={14} /> Origine</p>
                 <p className="text-sm font-semibold text-[#5F5751]">{selectedReg.country || 'Sénégal'}</p>
+              </div>
+              <div className="p-3 bg-[#FDF8F5] rounded-xl border border-[#F9E8E2]">
+                <p className="text-xs font-bold text-[#8B7E74] uppercase flex items-center gap-1"><MapPin size={14} /> Résidence</p>
+                <p className="text-sm font-semibold text-[#5F5751]">{selectedReg.residenceCountry || selectedReg.country || 'Sénégal'}</p>
+              </div>
+              <div className="p-3 bg-[#FDF8F5] rounded-xl border border-[#F9E8E2] col-span-2 md:col-span-1">
+                <p className="text-xs font-bold text-[#8B7E74] uppercase flex items-center gap-1"><Globe size={14} /> Religion</p>
+                <p className="text-sm font-semibold text-[#5F5751]">{selectedReg.religion || 'Non renseigné'}</p>
               </div>
             </div>
 
@@ -401,8 +499,7 @@ export const InscriptionsManager = () => {
     )}
   </DialogContent>
 </Dialog>
-    </div>
- 
- 
+  </div>
+  
 );
 };
