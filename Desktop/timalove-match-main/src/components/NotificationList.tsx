@@ -34,6 +34,14 @@ export const NotificationList = () => {
     loadNotifications();
   }, []);
 
+  useEffect(() => {
+  const checkSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log("SESSION ACTIVE :", session);
+  };
+  checkSession();
+}, []);
+
   // Fonction pour gérer le clic
   const handleNotificationClick = async (notification: any) => {
     // 3. LA REDIRECTION MAGIQUE
@@ -72,9 +80,10 @@ export const NotificationList = () => {
               <Heart size={14} fill="currentColor" />
             </div>
             <div className="flex-1">
-              <p className="text-sm text-slate-700 leading-tight">
-                <span className="font-bold">Coup de cœur !</span> {n.message}
-              </p>
+              <span className="font-bold text-rose-500">
+              {n.sender?.first_name || "Quelqu'un"} {n.sender?.age ? `(${n.sender.age} ans)` : ''}
+            </span>
+            <span className="text-slate-600"> {n.message}</span>
               <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 font-medium">
                 <Clock size={10} /> 
                 {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

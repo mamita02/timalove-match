@@ -17,25 +17,31 @@ const AdminPage = () => {
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
-  // 1. Fonction pour vérifier si l'UID de la session est présent dans la table 'admins'
+  // 1. CORRECTION ICI : On vérifie le rôle dans 'registrations'
   const checkIsAdmin = async (userId: string) => {
     try {
+      console.log("Vérification des droits pour :", userId);
+
       const { data, error } = await supabase
-        .from('admins')
-        .select('id')
+        .from('registrations') // <-- On regarde dans la bonne table
+        .select('role')        // <-- On récupère le rôle
         .eq('id', userId)
         .single();
 
-      if (error || !data) {
-        console.error("Accès refusé: non présent dans la table admins");
-        await supabase.auth.signOut();
+      // Si erreur, pas de données, ou si le rôle n'est pas 'admin'
+      if (error || !data || data.role !== 'admin') {
+        console.error("Accès refusé : Pas admin ou erreur", error);
+        await supabase.auth.signOut(); // On déconnecte par sécurité
         setIsAdmin(false);
         setSession(null);
         return false;
       }
+
+      console.log("Accès Admin validé !");
       setIsAdmin(true);
       return true;
     } catch (err) {
+      console.error("Erreur inattendue:", err);
       setIsAdmin(false);
       return false;
     }
@@ -57,11 +63,13 @@ const AdminPage = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
       if (currentSession) {
+        // On ne revérifie pas tout le temps pour éviter les boucles, mais c'est plus sûr
         const adminStatus = await checkIsAdmin(currentSession.user.id);
         if (adminStatus) {
           setSession(currentSession);
         } else {
-          setSession(null);
+            // Si la session change et qu'il n'est plus admin
+            setSession(null);
         }
       } else {
         setSession(null);
@@ -77,6 +85,7 @@ const AdminPage = () => {
     e.preventDefault();
     setAuthLoading(true);
     
+    // Connexion Auth classique (Email/Mot de passe)
     const { data, error } = await supabase.auth.signInWithPassword({ 
       email, 
       password 
@@ -84,20 +93,26 @@ const AdminPage = () => {
 
     if (error) {
       toast({ 
-        title: "Accès refusé", 
-        description: "Identifiants incorrects ou utilisateur inexistant.", 
+        title: "Erreur de connexion", 
+        description: error.message === "Invalid login credentials" 
+            ? "Email ou mot de passe incorrect." 
+            : error.message, 
         variant: "destructive" 
       });
       setAuthLoading(false);
-    } else if (data.user) {
-      // Une fois logué dans Auth, on vérifie immédiatement s'il est admin
+      return;
+    } 
+    
+    if (data.user) {
+      // Une fois logué, on vérifie si c'est bien un ADMIN
       const adminStatus = await checkIsAdmin(data.user.id);
+      
       if (adminStatus) {
         toast({ title: "Bienvenue Admin", description: "Accès autorisé." });
       } else {
         toast({ 
           title: "Accès non autorisé", 
-          description: "Votre compte n'a pas les droits d'administration.", 
+          description: "Ce compte n'a pas les droits d'administration.", 
           variant: "destructive" 
         });
       }
@@ -105,7 +120,7 @@ const AdminPage = () => {
     }
   };
 
-  // Écran de chargement
+  // Écran de chargement initial
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-[#F5EEFA]">
       <Loader2 className="animate-spin text-primary" size={40} />
@@ -150,7 +165,7 @@ const AdminPage = () => {
     );
   }
 
-  // SI CONNECTÉ ET ADMIN : Accès total
+  // SI CONNECTÉ ET ADMIN : Accès total au Dashboard
   return (
     <AdminLayout>
       <div className="p-6">

@@ -1,17 +1,23 @@
 import { Footer } from "@/components/Footer";
 import { MemberGallery } from "@/components/MemberGallery";
 import { Navbar } from "@/components/Navbar";
-import { NotificationList } from "@/components/NotificationList"; // L'importation qui manquait
+import { NotificationList } from "@/components/NotificationList";
+import { RequestsModal } from "@/components/RequestsModal"; // <-- NOUVEAU IMPORT
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
-import { Bell, Filter, Loader2, Search, User } from "lucide-react";
+import { Bell, Filter, Heart, Loader2, LogOut, Search, User } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const UserProfile = () => {
+  const [sessionUser, setSessionUser] = useState<any>(null); // Pour garder l'ID utilisateur
   const [userSexe, setUserSexe] = useState<'homme' | 'femme' | null>(null);
   const [hasPaid, setHasPaid] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [showNotifs, setShowNotifs] = useState(false); // État pour ouvrir/fermer la liste
+  
+  // États pour les menus
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false); // <-- Pour le menu profil
+  const [showRequestsModal, setShowRequestsModal] = useState(false); // <-- Pour ouvrir le modal
 
   const [visibleCount, setVisibleCount] = useState(10);
   const [loading, setLoading] = useState(true);
@@ -22,6 +28,7 @@ const UserProfile = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
+        setSessionUser(user);
 
         if (user) {
           const { data: profile } = await supabase
@@ -38,6 +45,7 @@ const UserProfile = () => {
 
           fetchNotifications(user.id);
 
+          // Écoute des notifications en temps réel
           const channel = supabase
             .channel('realtime_notifications')
             .on('postgres_changes', 
@@ -68,6 +76,11 @@ const UserProfile = () => {
     if (count !== null) setUnreadCount(count);
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
+
   if (loading || userSexe === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FDFBFB]">
@@ -80,6 +93,15 @@ const UserProfile = () => {
     <div className="min-h-screen bg-[#FDFBFB]">
       <Navbar />
       
+      {/* Intégration du Modal des Demandes */}
+      {sessionUser && (
+        <RequestsModal 
+          isOpen={showRequestsModal} 
+          onClose={() => setShowRequestsModal(false)} 
+          userId={sessionUser.id} 
+        />
+      )}
+
       <div className="pt-20 pb-4 bg-white/95 backdrop-blur-md border-b border-rose-100 sticky top-0 z-40 shadow-sm">
         <div className="container mx-auto px-4 space-y-4">
           <div className="flex items-center gap-4">
@@ -89,10 +111,13 @@ const UserProfile = () => {
             </div>
 
             <div className="hidden md:flex items-center gap-4 ml-auto">
+               
+               {/* --- NOTIFICATIONS --- */}
                <div className="relative">
                   <button 
                     onClick={() => {
                       setShowNotifs(!showNotifs);
+                      setShowProfileMenu(false); // Ferme l'autre menu
                       if (!showNotifs) setUnreadCount(0);
                     }}
                     className={`relative p-2 transition-colors ${showNotifs ? 'text-rose-500' : 'text-slate-400 hover:text-rose-500'}`}
@@ -105,16 +130,55 @@ const UserProfile = () => {
                     )}
                   </button>
 
-                  {/* Affichage de la liste */}
                   {showNotifs && (
                     <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in zoom-in duration-200">
                       <NotificationList />
                     </div>
                   )}
                </div>
-               <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-400 border border-rose-100">
-                  <User size={20} />
+
+               {/* --- MENU PROFIL (User) --- */}
+               <div className="relative">
+                 <button 
+                    onClick={() => {
+                      setShowProfileMenu(!showProfileMenu);
+                      setShowNotifs(false); // Ferme les notifs
+                    }}
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center border transition-all ${showProfileMenu ? 'bg-rose-500 text-white border-rose-500 shadow-lg ring-2 ring-rose-200' : 'bg-rose-50 text-rose-400 border-rose-100 hover:bg-rose-100'}`}
+                 >
+                   <User size={20} />
+                 </button>
+
+                 {/* Liste déroulante du Profil */}
+                 {showProfileMenu && (
+                   <div className="absolute top-full right-0 mt-3 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50 animate-in fade-in zoom-in duration-200">
+                      <div className="px-3 py-2 border-b border-slate-50 mb-1">
+                        <p className="text-xs text-slate-400 font-medium">Mon Compte</p>
+                      </div>
+                      
+                      <button 
+                        onClick={() => {
+                          setShowRequestsModal(true);
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors"
+                      >
+                        <Heart size={16} />
+                        Mes Demandes
+                        {/* Petit badge s'il y a des demandes (optionnel, à connecter plus tard) */}
+                      </button>
+
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-red-50 rounded-xl transition-colors mt-1"
+                      >
+                        <LogOut size={16} />
+                        Se déconnecter
+                      </button>
+                   </div>
+                 )}
                </div>
+
             </div>
           </div>
 

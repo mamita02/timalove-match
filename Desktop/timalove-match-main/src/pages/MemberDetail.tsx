@@ -24,39 +24,60 @@ const MemberDetail = () => {
     if (id) fetchMember();
   }, [id]);
 
+  useEffect(() => {
+  const checkSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log("SESSION ACTIVE :", session);
+  };
+  checkSession();
+}, []);
+
   // LA FONCTION DOIT ÊTRE DÉCLARÉE COMME CECI
   const handleLike = async () => {
-    try {
-      // 1. On récupère l'utilisateur connecté
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        toast.error("Vous devez être connecté pour envoyer un coup de cœur");
-        return;
-      }
-
-      // 2. On insère la notification
-      const { error } = await supabase
-        .from('notifications')
-        .insert([
-          { 
-            from_user_id: user.id, // ID de l'homme (expéditeur)
-            to_user_id: member.id,   // ID de la femme (destinataire)
-            type: 'like',
-            message: `Un membre a flashé sur votre profil !`,
-            is_read: false
-          }
-        ]);
-
-      if (error) throw error;
-
-      toast.success("Coup de cœur envoyé !");
-      
-    } catch (error: any) {
-      console.error("Erreur notification:", error);
-      toast.error("Une erreur est survenue lors de l'envoi");
+  try {
+    // 1. Utilisateur connecté
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Vous devez être connecté");
+      return;
     }
-  };
+
+    // Sécurité basique
+    if (!member?.id || member.id === user.id) {
+      toast.error("Action invalide");
+      return;
+    }
+
+    // 2. Insertion des 2 notifications CLIENT ↔ CLIENT
+    const { error } = await supabase
+      .from("notifications")
+      .insert([
+        // 🔔 Notification pour le DESTINATAIRE
+        {
+          from_user_id: user.id,
+          to_user_id: member.id,
+          type: "like",
+          message: "Un membre a flashé sur votre profil 💖",
+        },
+
+        // 🔔 Notification pour l’EXPÉDITEUR
+        {
+          from_user_id: member.id,
+          to_user_id: user.id,
+          type: "like_sent",
+          message: "Votre coup de cœur a bien été envoyé 💌",
+        }
+      ]);
+
+    if (error) throw error;
+
+    toast.success("Coup de cœur envoyé 💖");
+  } catch (err) {
+    console.error("Erreur like:", err);
+    toast.error("Erreur lors de l’envoi du coup de cœur");
+  }
+};
+
 
   if (loading || !member) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
